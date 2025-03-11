@@ -12,17 +12,11 @@
   "commands": [
     {
       "name": "holiday-progress",
-      "title": "🎉 节假日进度",
+      "title": "🎉 下一个节假日",
       "description": "显示距离下一个节假日的进度",
       "mode": "no-view",
-      "interval": "4h",
+      "interval": "6h",
       "subtitle": "Loading..."
-    },
-    {
-      "name": "toggle-menubar",
-      "title": "切换菜单栏显示",
-      "description": "开启或关闭菜单栏节假日显示",
-      "mode": "view"
     },
     {
       "name": "menubar-holiday",

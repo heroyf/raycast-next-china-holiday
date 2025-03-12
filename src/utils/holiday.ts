@@ -4,12 +4,20 @@ import fetch from "node-fetch";
 const HOLIDAY_API_URL = "https://www.shuyz.com/githubfiles/china-holiday-calender/master/holidayAPI.json";
 const CACHE_KEY = "holiday_cache";
 const CACHE_TIMESTAMP_KEY = "holiday_cache_timestamp";
+const COMP_DAYS_CACHE_KEY = "comp_days_cache";
 
 export interface Holiday {
   name: string;
   startDate: string;  // 原始API日期字符串
   endDate: string;    // 原始API日期字符串
   daysUntil: number;
+}
+
+export interface HolidayWithCompDays {
+  name: string;
+  startDate: string;
+  endDate: string;
+  compDays: string[];  // 补班日期数组
 }
 
 interface HolidayAPIResponse {
@@ -93,7 +101,8 @@ async function fetchNextHoliday(): Promise<Holiday | null> {
         startDate: holiday.StartDate,
         endDate: holiday.EndDate,
         daysUntil,
-        duration: holiday.Duration
+        duration: holiday.Duration,
+        compDays: holiday.CompDays
       });
       
       // 只考虑未来的假期
@@ -124,6 +133,86 @@ async function fetchNextHoliday(): Promise<Holiday | null> {
     console.error("Error fetching holiday data:", error);
     return null;
   }
+}
+
+// 获取所有节假日及其补班日期
+export async function getAllHolidaysWithCompDays(forceRefresh = false): Promise<HolidayWithCompDays[]> {
+  try {
+    // 检查缓存
+    if (!forceRefresh) {
+      const cachedData = await LocalStorage.getItem<string>(COMP_DAYS_CACHE_KEY);
+      const cachedTimestamp = await LocalStorage.getItem<string>(CACHE_TIMESTAMP_KEY);
+      
+      if (cachedData && cachedTimestamp) {
+        const timestamp = parseInt(cachedTimestamp);
+        const now = Date.now();
+        
+        // 缓存23小时内有效
+        const cacheValidityHours = 23;
+        if (now - timestamp < cacheValidityHours * 60 * 60 * 1000) {
+          console.log("Using cached comp days data");
+          return JSON.parse(cachedData);
+        }
+      }
+    }
+    
+    // 获取新数据
+    const response = await fetch(HOLIDAY_API_URL);
+    const data = await response.json() as HolidayAPIResponse;
+    
+    // 获取当前年份和下一年
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+    
+    // 收集所有节假日及其补班日期
+    const allHolidays: HolidayWithCompDays[] = [];
+    
+    // 处理当前年份的数据
+    if (data.Years[currentYear.toString()]) {
+      for (const holiday of data.Years[currentYear.toString()]) {
+        allHolidays.push({
+          name: holiday.Name,
+          startDate: holiday.StartDate,
+          endDate: holiday.EndDate,
+          compDays: holiday.CompDays || []
+        });
+      }
+    }
+    
+    // 处理下一年的数据
+    if (data.Years[nextYear.toString()]) {
+      for (const holiday of data.Years[nextYear.toString()]) {
+        allHolidays.push({
+          name: holiday.Name,
+          startDate: holiday.StartDate,
+          endDate: holiday.EndDate,
+          compDays: holiday.CompDays || []
+        });
+      }
+    }
+    
+    // 更新缓存
+    await LocalStorage.setItem(COMP_DAYS_CACHE_KEY, JSON.stringify(allHolidays));
+    await LocalStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+    
+    return allHolidays;
+  } catch (error) {
+    console.error("Error fetching all holidays with comp days:", error);
+    return [];
+  }
+}
+
+// 获取所有补班日期
+export async function getAllCompDays(forceRefresh = false): Promise<string[]> {
+  const holidays = await getAllHolidaysWithCompDays(forceRefresh);
+  
+  // 收集所有补班日期
+  const allCompDays: string[] = [];
+  for (const holiday of holidays) {
+    allCompDays.push(...holiday.compDays);
+  }
+  
+  return allCompDays;
 }
 
 export async function getNextHoliday(forceRefresh = false): Promise<Holiday | null> {

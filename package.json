@@ -3,7 +3,7 @@
   "name": "next-china-holiday",
   "title": "next-china-holiday",
   "description": "show next china holiday",
-  "icon": "extension-icon.png",
+  "icon": "next-china-holiday-icon.png",
   "author": "heroyf",
   "categories": [
     "Fun"
@@ -19,23 +19,16 @@
       "subtitle": "Loading..."
     },
     {
-      "name": "menubar-holiday",
-      "title": "菜单栏节假日",
-      "description": "在菜单栏显示下一个节假日",
-      "mode": "menu-bar",
-      "interval": "1d"
+      "name": "comp-days-this-week",
+      "title": "📊 本周补班情况",
+      "description": "显示本周是否有需要补班的日子",
+      "mode": "no-view",
+      "interval": "6h",
+      "subtitle": "Loading..."
     }
   ],
   "preferences": [
-    {
-      "name": "menubarEnabled",
-      "type": "checkbox",
-      "required": false,
-      "title": "启用菜单栏显示",
-      "description": "是否在菜单栏显示节假日信息",
-      "default": true,
-      "label": "启用"
-    }
+
   ],
   "dependencies": {
     "@raycast/api": "^1.93.2",

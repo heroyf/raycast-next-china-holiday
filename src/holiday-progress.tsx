@@ -1,4 +1,4 @@
-import { updateCommandMetadata, showToast, Toast, environment, LaunchType } from "@raycast/api";
+import { updateCommandMetadata, showToast, Toast, environment, LaunchType, LaunchProps } from "@raycast/api";
 import { getNextHoliday } from "./utils/holiday";
 
 function formatDate(date: string): string {
@@ -7,29 +7,59 @@ function formatDate(date: string): string {
   return `${dateObj.getMonth() + 1}.${dateObj.getDate()}`;
 }
 
-function generateProgressBar(daysUntil: number): string {
-  // 假设最大显示30天的进度
-  const maxDays = 30;
-  const progress = Math.max(0, Math.min(1, 1 - (daysUntil / maxDays)));
-  const width = 10; // 缩短进度条长度以适应命令列表显示
-  const filledCount = Math.round(progress * width);
-  const emptyCount = width - filledCount;
+// 将数字转换为emoji数字
+function numberToEmoji(num: number): string {
+  if (num > 99) return `${num}`; // 如果大于99，直接返回数字
   
-  return "■".repeat(filledCount) + "□".repeat(emptyCount);
+  const emojiDigits = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
+  
+  if (num < 10) {
+    return emojiDigits[num];
+  } else {
+    const tens = Math.floor(num / 10);
+    const ones = num % 10;
+    return `${emojiDigits[tens]}${emojiDigits[ones]}`;
+  }
 }
 
-export default async function Command() {
+// 生成节假日状态显示
+function generateHolidayStatus(holiday: { name: string, startDate: string, endDate: string, daysUntil: number }): string {
+  const startDateStr = formatDate(holiday.startDate);
+  const endDateStr = formatDate(holiday.endDate);
+  const dateRange = `${startDateStr}-${endDateStr}`;
+  
+  // 根据剩余天数选择合适的emoji
+  let statusEmoji = '🎉';
+  if (holiday.daysUntil <= 0) {
+    statusEmoji = '🎊'; // 已经开始
+  } else if (holiday.daysUntil <= 3) {
+    statusEmoji = '⏳'; // 即将到来
+  } else if (holiday.daysUntil <= 7) {
+    statusEmoji = '📅'; // 一周内
+  } else if (holiday.daysUntil <= 30) {
+    statusEmoji = '📆'; // 一个月内
+  }
+  
+  // 剩余天数的emoji表示
+  const daysEmoji = holiday.daysUntil > 0 ? numberToEmoji(holiday.daysUntil) : '0️⃣';
+  
+  // 组合最终显示
+  return `${statusEmoji} ${holiday.name}(${dateRange}) ${daysEmoji} ${holiday.daysUntil > 0 ? '天' : '放假啦'}`;
+}
+
+export default async function Command(props: LaunchProps) {
   try {
     // 检查是否是通过刷新按钮触发的或用户手动激活的
-    const isRefreshAction = environment.launchContext?.action === "refresh";
+    const isRefreshAction = props.launchContext?.action === "refresh";
     const isUserInitiated = environment.launchType === LaunchType.UserInitiated;
     
     // 在以下情况下强制刷新：1. 点击刷新按钮 2. 用户手动激活命令
     const shouldForceRefresh = isRefreshAction || isUserInitiated;
     
-    console.log("Launch context:", environment.launchContext, 
-                "isRefreshAction:", isRefreshAction, 
+    // 调试日志
+    console.log("Launch type:", environment.launchType, 
                 "isUserInitiated:", isUserInitiated,
+                "isRefreshAction:", isRefreshAction,
                 "shouldForceRefresh:", shouldForceRefresh);
     
     // 根据条件决定是否强制刷新
@@ -51,11 +81,8 @@ export default async function Command() {
       refreshType: shouldForceRefresh ? "强制刷新" : "使用缓存"
     });
 
-    const progressBar = generateProgressBar(holiday.daysUntil);
-    const startDateStr = formatDate(holiday.startDate);
-    const endDateStr = formatDate(holiday.endDate);
-    const daysText = holiday.daysUntil > 0 ? `还有 ${holiday.daysUntil} 天` : "已开始";
-    const subtitle = `${holiday.name}(${startDateStr}-${endDateStr}) ${progressBar} ${daysText}`;
+    // 生成节假日状态显示
+    const subtitle = generateHolidayStatus(holiday);
     
     updateCommandMetadata({ subtitle });
 
@@ -64,7 +91,7 @@ export default async function Command() {
       await showToast({
         style: Toast.Style.Success,
         title: shouldForceRefresh ? "数据已刷新" : holiday.name,
-        message: `${startDateStr}-${endDateStr} ${progressBar} ${daysText}`
+        message: `${formatDate(holiday.startDate)}-${formatDate(holiday.endDate)} ${holiday.daysUntil > 0 ? `还有 ${holiday.daysUntil} 天` : "已开始"}`
       });
     }
   } catch (error) {

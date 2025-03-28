@@ -2,14 +2,14 @@ import { updateCommandMetadata, showToast, Toast, environment, LaunchType, Launc
 import { getNextHoliday } from "./utils/holiday";
 
 function formatDate(date: string): string {
-  // 从字符串创建Date对象
+  // Create Date object from string
   const dateObj = new Date(date);
   return `${dateObj.getMonth() + 1}.${dateObj.getDate()}`;
 }
 
-// 将数字转换为emoji数字
+// Convert number to emoji number
 function numberToEmoji(num: number): string {
-  if (num > 99) return `${num}`; // 如果大于99，直接返回数字
+  if (num > 99) return `${num}`; // If greater than 99, return number directly
   
   const emojiDigits = ['0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
   
@@ -22,89 +22,89 @@ function numberToEmoji(num: number): string {
   }
 }
 
-// 生成节假日状态显示
+// Generate holiday status display
 function generateHolidayStatus(holiday: { name: string, startDate: string, endDate: string, daysUntil: number }): string {
   const startDateStr = formatDate(holiday.startDate);
   const endDateStr = formatDate(holiday.endDate);
   const dateRange = `${startDateStr}-${endDateStr}`;
   
-  // 根据剩余天数选择合适的emoji
+  // Choose appropriate emoji based on remaining days
   let statusEmoji = '🎉';
   if (holiday.daysUntil <= 0) {
-    statusEmoji = '🎊'; // 已经开始
+    statusEmoji = '🎊'; // Already started
   } else if (holiday.daysUntil <= 3) {
-    statusEmoji = '⏳'; // 即将到来
+    statusEmoji = '⏳'; // Coming soon
   } else if (holiday.daysUntil <= 7) {
-    statusEmoji = '📅'; // 一周内
+    statusEmoji = '📅'; // Within a week
   } else if (holiday.daysUntil <= 30) {
-    statusEmoji = '📆'; // 一个月内
+    statusEmoji = '📆'; // Within a month
   }
   
-  // 剩余天数的emoji表示
+  // Emoji representation of remaining days
   const daysEmoji = holiday.daysUntil > 0 ? numberToEmoji(holiday.daysUntil) : '0️⃣';
   
-  // 组合最终显示
-  return `${statusEmoji} ${holiday.name}(${dateRange}) ${daysEmoji} ${holiday.daysUntil > 0 ? '天' : '放假啦'}`;
+  // Combine final display
+  return `${statusEmoji} ${holiday.name}(${dateRange}) ${daysEmoji} ${holiday.daysUntil > 0 ? 'days' : 'Started'}`;
 }
 
 export default async function Command(props: LaunchProps) {
   try {
-    // 检查是否是通过刷新按钮触发的或用户手动激活的
+    // Check if triggered by refresh button or user manually
     const isRefreshAction = props.launchContext?.action === "refresh";
     const isUserInitiated = environment.launchType === LaunchType.UserInitiated;
     
-    // 在以下情况下强制刷新：1. 点击刷新按钮 2. 用户手动激活命令
+    // Force refresh in these cases: 1. Click refresh button 2. User manually activates command
     const shouldForceRefresh = isRefreshAction || isUserInitiated;
     
-    // 调试日志
+    // Debug logs
     console.log("Launch type:", environment.launchType, 
                 "isUserInitiated:", isUserInitiated,
                 "isRefreshAction:", isRefreshAction,
                 "shouldForceRefresh:", shouldForceRefresh);
     
-    // 根据条件决定是否强制刷新
+    // Get holiday data with optional force refresh
     const holiday = await getNextHoliday(shouldForceRefresh);
     
     if (!holiday) {
       updateCommandMetadata({
-        subtitle: "无法获取节假日信息"
+        subtitle: "Unable to fetch holiday information"
       });
       return;
     }
 
-    // 调试日志
+    // Debug logs
     console.log("Holiday dates:", {
       name: holiday.name,
       startDate: holiday.startDate,
       endDate: holiday.endDate,
       daysUntil: holiday.daysUntil,
-      refreshType: shouldForceRefresh ? "强制刷新" : "使用缓存"
+      refreshType: shouldForceRefresh ? "Force refresh" : "Using cache"
     });
 
-    // 生成节假日状态显示
+    // Generate holiday status display
     const subtitle = generateHolidayStatus(holiday);
     
     updateCommandMetadata({ subtitle });
 
-    // 只在用户主动触发命令或刷新时显示 Toast
+    // Show Toast only when user manually triggers command or refreshes
     if (isUserInitiated || isRefreshAction) {
       await showToast({
         style: Toast.Style.Success,
-        title: shouldForceRefresh ? "数据已刷新" : holiday.name,
-        message: `${formatDate(holiday.startDate)}-${formatDate(holiday.endDate)} ${holiday.daysUntil > 0 ? `还有 ${holiday.daysUntil} 天` : "已开始"}`
+        title: shouldForceRefresh ? "Data refreshed" : holiday.name,
+        message: `${formatDate(holiday.startDate)}-${formatDate(holiday.endDate)} ${holiday.daysUntil > 0 ? `${holiday.daysUntil} days left` : "Started"}`
       });
     }
   } catch (error) {
     console.error("Error in holiday progress command:", error);
     updateCommandMetadata({
-      subtitle: "获取节假日信息时出错"
+      subtitle: "Error fetching holiday information"
     });
     
     if (environment.launchType === LaunchType.UserInitiated) {
       await showToast({
         style: Toast.Style.Failure,
-        title: "错误",
-        message: "获取节假日信息时出错"
+        title: "Error",
+        message: "Failed to fetch holiday information"
       });
     }
   }

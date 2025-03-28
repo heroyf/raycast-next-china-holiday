@@ -1,17 +1,17 @@
 import { updateCommandMetadata, showToast, Toast, environment, LaunchType, LaunchProps } from "@raycast/api";
 import { getAllCompDays } from "./utils/holiday";
 
-// 获取本周的日期范围（周一到周日）
+// Get the date range for the current week (Monday to Sunday)
 function getCurrentWeekDates(): { startDate: Date; endDate: Date } {
   const now = new Date();
-  const currentDay = now.getDay(); // 0是周日，1-6是周一到周六
+  const currentDay = now.getDay(); // 0 is Sunday, 1-6 is Monday to Saturday
   
-  // 计算本周一的日期
+  // Calculate Monday's date
   const monday = new Date(now);
   monday.setDate(now.getDate() - (currentDay === 0 ? 6 : currentDay - 1));
   monday.setHours(0, 0, 0, 0);
   
-  // 计算本周日的日期
+  // Calculate Sunday's date
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   sunday.setHours(23, 59, 59, 999);
@@ -19,32 +19,32 @@ function getCurrentWeekDates(): { startDate: Date; endDate: Date } {
   return { startDate: monday, endDate: sunday };
 }
 
-// 检查日期是否在指定范围内
+// Check if a date is within the specified range
 function isDateInRange(date: string, startDate: Date, endDate: Date): boolean {
   const dateObj = new Date(date);
   return dateObj >= startDate && dateObj <= endDate;
 }
 
-// 格式化日期为 "MM.DD (周几)" 格式
+// Format date as "MM.DD (Weekday)" format
 function formatDateWithWeekday(dateString: string): string {
   const date = new Date(dateString);
   const month = date.getMonth() + 1;
   const day = date.getDate();
   
-  const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const weekday = weekdays[date.getDay()];
   
   return `${month}.${day} (${weekday})`;
 }
 
-// 查找下一个补班日期
+// Find the next make-up workday
 function findNextCompDay(allCompDays: string[], after: Date): string | null {
-  // 按日期排序
+  // Sort by date
   const sortedCompDays = [...allCompDays].sort((a, b) => {
     return new Date(a).getTime() - new Date(b).getTime();
   });
   
-  // 查找第一个在指定日期之后的补班日
+  // Find the first make-up workday after the specified date
   for (const compDay of sortedCompDays) {
     const compDayDate = new Date(compDay);
     if (compDayDate > after) {
@@ -55,115 +55,134 @@ function findNextCompDay(allCompDays: string[], after: Date): string | null {
   return null;
 }
 
+// Update command metadata
+function updateCommandSubtitle(compDaysThisWeek: string[], nextCompDay: string | null): void {
+  if (compDaysThisWeek.length > 0) {
+    // Format make-up workdays
+    const formattedDates = compDaysThisWeek.map(formatDateWithWeekday).join(", ");
+    
+    if (nextCompDay && !compDaysThisWeek.includes(nextCompDay)) {
+      // Has make-up workdays this week and future ones
+      updateCommandMetadata({
+        subtitle: `⚠️ Make-up workdays this week: ${formattedDates} | Next: ${formatDateWithWeekday(nextCompDay)}`
+      });
+    } else {
+      // Has make-up workdays this week but no future ones
+      updateCommandMetadata({
+        subtitle: `⚠️ Make-up workdays this week: ${formattedDates}`
+      });
+    }
+  } else {
+    if (nextCompDay) {
+      // No make-up workdays this week but has future ones
+      updateCommandMetadata({
+        subtitle: `🎉 No make-up workdays this week | Next: ${formatDateWithWeekday(nextCompDay)}`
+      });
+    } else {
+      // No make-up workdays at all
+      updateCommandMetadata({
+        subtitle: "🎉 Great! No make-up workdays scheduled"
+      });
+    }
+  }
+}
+
+// Show Toast notification
+async function showCompDaysToast(compDaysThisWeek: string[], nextCompDay: string | null): Promise<void> {
+  if (compDaysThisWeek.length > 0) {
+    // Has make-up workdays this week
+    const message = nextCompDay && !compDaysThisWeek.includes(nextCompDay) 
+      ? `This week: ${compDaysThisWeek.map(formatDateWithWeekday).join(", ")}\nNext: ${formatDateWithWeekday(nextCompDay)}`
+      : compDaysThisWeek.map(formatDateWithWeekday).join(", ");
+      
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Make-up Workdays This Week",
+      message
+    });
+  } else {
+    // No make-up workdays this week
+    const message = nextCompDay 
+      ? `Next make-up workday: ${formatDateWithWeekday(nextCompDay)}`
+      : "No make-up workdays scheduled";
+      
+    await showToast({
+      style: Toast.Style.Success,
+      title: "No Make-up Workdays This Week",
+      message
+    });
+  }
+}
+
+// Check if data should be force refreshed
+function shouldForceRefreshData(props: LaunchProps): boolean {
+  const isRefreshAction = props.launchContext?.action === "refresh";
+  const isUserInitiated = environment.launchType === LaunchType.UserInitiated;
+  
+  // Force refresh in these cases: 1. Click refresh button 2. User manually activates command
+  return isRefreshAction || isUserInitiated;
+}
+
+// Check if Toast should be shown
+function shouldShowToast(props: LaunchProps): boolean {
+  const isRefreshAction = props.launchContext?.action === "refresh";
+  const isUserInitiated = environment.launchType === LaunchType.UserInitiated;
+  
+  // Show Toast only when user manually triggers command or refreshes
+  return isUserInitiated || isRefreshAction;
+}
+
+// Handle errors
+async function handleError(error: unknown): Promise<void> {
+  console.error("Error in comp days command:", error);
+  updateCommandMetadata({
+    subtitle: "Error fetching make-up workday information"
+  });
+  
+  if (environment.launchType === LaunchType.UserInitiated) {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Error",
+      message: "Failed to fetch make-up workday information"
+    });
+  }
+}
+
 export default async function Command(props: LaunchProps) {
   try {
-    // 检查是否是通过刷新按钮触发的或用户手动激活的
-    const isRefreshAction = props.launchContext?.action === "refresh";
-    const isUserInitiated = environment.launchType === LaunchType.UserInitiated;
+    // Check if data should be force refreshed
+    const forceRefresh = shouldForceRefreshData(props);
     
-    // 在以下情况下强制刷新：1. 点击刷新按钮 2. 用户手动激活命令
-    const shouldForceRefresh = isRefreshAction || isUserInitiated;
-    
-    // 调试日志
+    // Debug logs
     console.log("Launch type:", environment.launchType, 
-                "isUserInitiated:", isUserInitiated,
-                "isRefreshAction:", isRefreshAction,
-                "shouldForceRefresh:", shouldForceRefresh);
+                "isUserInitiated:", environment.launchType === LaunchType.UserInitiated,
+                "isRefreshAction:", props.launchContext?.action === "refresh",
+                "shouldForceRefresh:", forceRefresh);
     
-    // 获取本周日期范围
+    // Get current week date range
     const { startDate, endDate } = getCurrentWeekDates();
     
-    // 调试日志
-    console.log("本周日期范围:", {
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString()
-    });
+    // Get all make-up workdays
+    const allCompDays = await getAllCompDays(forceRefresh);
     
-    // 获取所有补班日期
-    const allCompDays = await getAllCompDays(shouldForceRefresh);
-    
-    // 查找本周的补班日期
+    // Find make-up workdays this week
     const compDaysThisWeek = allCompDays.filter(date => 
       isDateInRange(date, startDate, endDate)
     );
     
-    // 查找下一个补班日期（从今天开始）
+    // Find next make-up workday (from today)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const nextCompDay = findNextCompDay(allCompDays, today);
     
-    // 调试日志
-    console.log("本周补班日期:", compDaysThisWeek);
-    console.log("下一个补班日期:", nextCompDay);
+    // Update command metadata
+    updateCommandSubtitle(compDaysThisWeek, nextCompDay);
     
-    // 更新命令元数据
-    if (compDaysThisWeek.length > 0) {
-      // 格式化补班日期
-      const formattedDates = compDaysThisWeek.map(formatDateWithWeekday).join(", ");
-      
-      if (nextCompDay && !compDaysThisWeek.includes(nextCompDay)) {
-        // 本周有补班，且还有未来的补班
-        updateCommandMetadata({
-          subtitle: `⚠️ 本周需要补班: ${formattedDates} | 下次: ${formatDateWithWeekday(nextCompDay)}`
-        });
-      } else {
-        // 本周有补班，但没有未来的补班
-        updateCommandMetadata({
-          subtitle: `⚠️ 本周需要补班: ${formattedDates}`
-        });
-      }
-    } else {
-      if (nextCompDay) {
-        // 本周没有补班，但有未来的补班
-        updateCommandMetadata({
-          subtitle: `🎉 本周没有补班 | 下次补班: ${formatDateWithWeekday(nextCompDay)}`
-        });
-      } else {
-        // 本周没有补班，也没有未来的补班
-        updateCommandMetadata({
-          subtitle: "🎉 太棒了，没有安排补班"
-        });
-      }
-    }
-    
-    // 只在用户主动触发命令或刷新时显示 Toast
-    if (isUserInitiated || isRefreshAction) {
-      if (compDaysThisWeek.length > 0) {
-        // 本周有补班
-        const message = nextCompDay && !compDaysThisWeek.includes(nextCompDay) 
-          ? `本周: ${compDaysThisWeek.map(formatDateWithWeekday).join(", ")}\n下次: ${formatDateWithWeekday(nextCompDay)}`
-          : compDaysThisWeek.map(formatDateWithWeekday).join(", ");
-          
-        await showToast({
-          style: Toast.Style.Failure,
-          title: "本周需要补班",
-          message
-        });
-      } else {
-        // 本周没有补班
-        const message = nextCompDay 
-          ? `下次补班: ${formatDateWithWeekday(nextCompDay)}`
-          : "没有安排补班";
-          
-        await showToast({
-          style: Toast.Style.Success,
-          title: "本周没有补班",
-          message
-        });
-      }
+    // Show Toast notification (if needed)
+    if (shouldShowToast(props)) {
+      await showCompDaysToast(compDaysThisWeek, nextCompDay);
     }
   } catch (error) {
-    console.error("Error in comp days command:", error);
-    updateCommandMetadata({
-      subtitle: "获取补班信息时出错"
-    });
-    
-    if (environment.launchType === LaunchType.UserInitiated) {
-      await showToast({
-        style: Toast.Style.Failure,
-        title: "错误",
-        message: "获取补班信息时出错"
-      });
-    }
+    await handleError(error);
   }
 } 

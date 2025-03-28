@@ -1,8 +1,8 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "next-china-holiday",
-  "title": "next-china-holiday",
-  "description": "show next china holiday",
+  "title": "Next China Holiday",
+  "description": "Show next China holiday and make-up workdays",
   "icon": "next-china-holiday-icon.png",
   "author": "heroyf",
   "categories": [
@@ -12,16 +12,16 @@
   "commands": [
     {
       "name": "holiday-progress",
-      "title": "🎉 下一个节假日",
-      "description": "显示距离下一个节假日的进度",
+      "title": "🎉 Next Holiday",
+      "description": "Show progress until the next holiday",
       "mode": "no-view",
       "interval": "6h",
       "subtitle": "Loading..."
     },
     {
       "name": "comp-days-this-week",
-      "title": "📊 本周补班情况",
-      "description": "显示本周是否有需要补班的日子",
+      "title": "📊 Make-up Workdays",
+      "description": "Show make-up workdays for this week",
       "mode": "no-view",
       "interval": "6h",
       "subtitle": "Loading..."
